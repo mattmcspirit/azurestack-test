@@ -72,7 +72,7 @@ docker pull docker/ucp:$UCP_VERSION
 docker run --rm --name ucp \
   -v /var/run/docker.sock:/var/run/docker.sock \
   docker/ucp:$UCP_VERSION \
-  install --san $UCP_PUBLIC_FQDN --admin-password $UCP_ADMIN_PASSWORD --debug
+  install --controller-port 12390 --san $UCP_PUBLIC_FQDN --admin-password $UCP_ADMIN_PASSWORD --debug
 
 sleep 10
 
@@ -82,13 +82,14 @@ if [ -z "$UCP_NODE"]; then
   export UCP_NODE=$(docker node ls | grep mgr0 | awk '{print $3}');
 fi
 
-docker pull docker/dtr:2.3.0-beta1
+docker pull docker/dtr:$DTR_VERSION
 
 docker run --rm \
   docker/dtr:$DTR_VERSION install \
+  --replica-http-port 12392 \
+  --replica-https-port 12391 \
   --ucp-url $UCP_PUBLIC_FQDN \
   --ucp-node $UCP_NODE \
   --dtr-external-url $DTR_PUBLIC_FQDN \
   --ucp-username admin --ucp-password $UCP_ADMIN_PASSWORD \
-  --ucp-insecure-tls \
-  --replica-https-port 8443 \
+  --ucp-insecure-tls 
