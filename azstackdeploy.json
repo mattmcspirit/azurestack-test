@@ -5,91 +5,80 @@
         "prefix": {
             "minLength": 3,
             "maxLength": 7,
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Prefix used for all resources"
             }
         },
-        "hubUsername": {
-            "type": "String",
-            "metadata": {
-                "description": "Hub username"
-            }
-        },
-        "hubPassword": {
-            "type": "SecureString",
-            "metadata": {
-                "description": "Hub password"
-            }
-        },
         "adminUsername": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Admin username"
             }
         },
         "dtrVersion": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "DTR Version"
             }
         },
         "ucpVersion": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "UCP Version"
             }
         },
         "dockerVersion": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Docker Version"
             }
         },
         "adminPassword": {
-            "type": "SecureString",
+            "type": "securestring",
             "metadata": {
                 "description": "Admin password"
             }
         },
         "sshPublicKey": {
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "SSH public key"
             }
         },
         "vmSize": {
             "defaultValue": "Standard_D2_v2",
-            "type": "String",
+            "type": "string",
             "metadata": {
                 "description": "Size of the VM"
             }
         },
         "managerCount": {
             "defaultValue": 1,
-            "type": "Int",
+            "type": "int",
             "metadata": {
                 "description": "Number of worker nodes"
             }
         },
         "workerCount": {
             "defaultValue": 3,
-            "type": "Int",
+            "type": "int",
             "metadata": {
                 "description": "Number of worker nodes"
             }
         },
         "dnsFqdnSuffix": {
-            "defaultValue": "cloudapp.azure.com",
+            "defaultValue": "cloudapp.azurestack.external",
             "allowedValues": [
+                "cloudapp.azurestack.external",
                 "cloudapp.azure.com",
                 "cloudapp.usgovcloudapi.net"
             ],
-            "type": "String"
+            "type": "string"
         },
         "artifactBaseUri": {
-            "defaultValue": "https://raw.githubusercontent.com/friism/azure-test/master/",
-            "type": "String"
+            "defaultValue": "https://raw.githubusercontent.com/uday-shetty/azurestack-test/master/"
+            "type": "string"
         }
     },
     "variables": {
@@ -152,8 +141,9 @@
             "lbProbe8081ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8081Probe')]",
             "lbProbe8082ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8082Probe')]"
         },
-        "storageAccountName": "[concat(variables('prefix'),resourceGroup().name)]",
+        "storageAccountName": "[concat(variables('prefix'),uniqueString(concat(resourceGroup().id, '0')))]",
         "storageAccountType": "Standard_LRS",
+        "storageLocation": "[resourceGroup().location]",
         "addressPrefix": "10.0.0.0/16",
         "subnetName": "Subnet",
         "subnetPrefix": "10.0.144.0/24",
@@ -162,14 +152,15 @@
         "vnetName": "[concat(variables('prefix'), '_vnet')]",
         "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]",
         "nsgName": "[concat(variables('prefix'), '_nsg')]",
-        "sshKeyPath": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]"
+        "sshKeyPath": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+        "vhdContainerName": "vhd"
     },
     "resources": [
         {
             "type": "Microsoft.Storage/storageAccounts",
-            "name": "[toLower(variables('storageAccountName'))]",
-            "apiVersion": "2015-05-01-preview",
-            "location": "[resourceGroup().location]",
+            "name": "[variables('storageAccountName')]",
+            "apiVersion": "2015-06-15",
+            "location": "[variables('storageLocation')]",
             "properties": {
                 "accountType": "[variables('storageAccountType')]"
             }
@@ -179,14 +170,20 @@
             "name": "[variables('manager').availabilitySetName]",
             "apiVersion": "2015-06-15",
             "location": "[resourceGroup().location]",
-            "properties": {}
+            "properties": {
+                "platformUpdateDomainCount": 1,
+                "platformFaultDomainCount": 1
+            }
         },
         {
             "type": "Microsoft.Compute/availabilitySets",
             "name": "[variables('worker').availabilitySetName]",
             "apiVersion": "2015-06-15",
             "location": "[resourceGroup().location]",
-            "properties": {}
+            "properties": {
+                "platformUpdateDomainCount": 1,
+                "platformFaultDomainCount": 1
+            }
         },
         {
             "type": "Microsoft.Network/publicIPAddresses",
@@ -284,7 +281,7 @@
                             "access": "Allow",
                             "description": "Allow UCP",
                             "destinationAddressPrefix": "*",
-                            "destinationPortRange": "8443",
+                            "destinationPortRange": "12390",
                             "direction": "Inbound",
                             "priority": 206,
                             "protocol": "Tcp",
@@ -298,7 +295,7 @@
                             "access": "Allow",
                             "description": "Allow DTR",
                             "destinationAddressPrefix": "*",
-                            "destinationPortRange": "443",
+                            "destinationPortRange": "12391",
                             "direction": "Inbound",
                             "priority": 207,
                             "protocol": "Tcp",
@@ -306,10 +303,22 @@
                             "sourcePortRange": "*"
                         }
                     }
+                    {
+                        "name": "dtrhttp",
+                        "properties": {
+                            "access": "Allow",
+                            "description": "Allow DTR",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "12392",
+                            "direction": "Inbound",
+                            "priority": 208,
+                            "protocol": "Tcp",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*"
+                        }
+                    }
                 ]
-            },
-            "resources": [],
-            "dependsOn": []
+            }
         },
         {
             "type": "Microsoft.Network/networkInterfaces",
@@ -471,7 +480,7 @@
                             },
                             "protocol": "Tcp",
                             "frontendPort": 443,
-                            "backendPort": 443,
+                            "backendPort": 12390,
                             "enableFloatingIP": false,
                             "idleTimeoutInMinutes": 5,
                             "probe": {
@@ -490,7 +499,7 @@
                             },
                             "protocol": "Tcp",
                             "frontendPort": 443,
-                            "backendPort": 8443,
+                            "backendPort": 12391,
                             "enableFloatingIP": false,
                             "idleTimeoutInMinutes": 5,
                             "probe": {
@@ -533,7 +542,7 @@
                         "properties": {
                             "intervalInSeconds": 10,
                             "numberOfProbes": 2,
-                            "port": 443,
+                            "port": 12390,
                             "protocol": "Tcp"
                         }
                     },
@@ -542,7 +551,7 @@
                         "properties": {
                             "intervalInSeconds": 10,
                             "numberOfProbes": 2,
-                            "port": 8443,
+                            "port": 12391,
                             "protocol": "Tcp"
                         }
                     }
@@ -696,6 +705,7 @@
                 "osProfile": {
                     "computerName": "[concat(variables('manager').vmNamePrefix, copyIndex())]",
                     "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
                     "linuxConfiguration": {
                         "disablePasswordAuthentication": true,
                         "ssh": {
@@ -713,13 +723,13 @@
                         "publisher": "[variables('manager').imagePublisher]",
                         "offer": "[variables('manager').imageOffer]",
                         "sku": "[variables('manager').imageSKU]",
-                        "version": "latest"
+                        "version": "1.0.2"
                     },
-		    "osDisk": {
-			"name": "osdisk",
-			"vhd": {
-				"uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob, '/vhds/', '/', 'osdiskmgr', '.vhd')]"
-				},
+                    "osDisk": {
+                        "name": "osdiskmgr",
+                        "vhd": {
+                            "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('manager').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
+                        },
                         "caching": "ReadWrite",
                         "createOption": "FromImage"
                     }
@@ -775,13 +785,14 @@
                         "version": "latest"
                     },
                     "osDisk": {
-                        "name": "osdisk",
-			"vhd": {
-				"uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).primaryEndpoints.blob, '/vhds/', '/', 'osdiskwrk', '.vhd')]"
-                                },
+                        "name": "osdiskwrk",
+                        "vhd": {
+                            "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('worker').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
+                        },
                         "caching": "ReadWrite",
                         "createOption": "FromImage"
-                    }
+                    },
+                    "dataDisks": []
                 },
                 "networkProfile": {
                     "networkInterfaces": [
@@ -815,19 +826,19 @@
                 "displayName": "[concat(variables('prefix'), '_mgr_', 'extension')]"
             },
             "properties": {
-                "publisher": "Microsoft.Azure.Extensions",
-                "type": "CustomScript",
-                "typeHandlerVersion": "2.0",
-                "autoUpgradeMinorVersion": true,
+                "publisher": "Microsoft.OSTCExtensions",
+                "type": "CustomScriptForLinux",
+                "typeHandlerVersion": "1.5",
+                "autoUpgradeMinorVersion": "true",
                 "settings": {
                     "fileUris": [
                         "[concat(parameters('artifactBaseUri'), 'interfaces')]",
                         "[concat(parameters('artifactBaseUri'), 'set-static-ip.sh')]",
-                        "[concat(parameters('artifactBaseUri'), 'install-docker.sh')]",
-                        "[concat(parameters('artifactBaseUri'), 'install-ucp-mgr.sh')]",
-                        "[concat(parameters('artifactBaseUri'), 'install-dtr-mgr.sh')]"
-                    ],
-                    "commandToExecute": "[concat('export UCP_PUBLIC_FQDN=', variables('manager_sub0').ucpHostname, '; export DTR_PUBLIC_FQDN=', variables('manager_sub0').dtrHostname, '; export UCP_ADMIN_PASSWORD=', parameters('adminPassword'), '; export UCP_VERSION=', parameters('ucpVersion'), '; export DTR_VERSION=', parameters('dtrVersion'), '; export DOCKER_VERSION=', parameters('dockerVersion'), '; export HUB_PASSWORD=', parameters('hubPassword'), '; export HUB_USERNAME=', parameters('hubUsername'), '; ./install-docker.sh; ./install-ucp-mgr.sh; ./install-dtr-mgr.sh;')]"
+                        "[concat(parameters('artifactBaseUri'), 'install-dockeronenode.sh')]"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat('bash install-dockeronenode.sh ', variables('manager_sub0').ucpHostname, ' ', variables('manager_sub0').dtrHostname, ' ', parameters('adminPassword'), ' ', parameters('ucpVersion'), ' ', parameters('dtrVersion'), ' ', parameters('dockerVersion'), ' ', parameters('hubPassword'), ' ', parameters('hubUsername'))]"
                 }
             },
             "dependsOn": [
@@ -854,7 +865,9 @@
                 "settings": {
                     "fileUris": [
                         "[concat(parameters('artifactBaseUri'), 'configure-worker.ps1')]"
-                    ],
+                    ]
+                },
+                "protectedSettings": {
                     "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File configure-worker.ps1 -DockerVersion ', parameters('dockerVersion'), ' -HubPassword ', parameters('hubPassword'), ' -HubUsername ', parameters('hubUsername'), ' -UcpVersion ', parameters('ucpVersion'), ' -DTRFQDN ', variables('manager_sub0').dtrHostname)]"
                 }
             },
@@ -865,23 +878,23 @@
     ],
     "outputs": {
         "mgr_ucp_pip": {
-            "type": "String",
+            "type": "string",
             "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameUcp)).ipAddress]"
         },
         "mgr_ucp_hostname": {
-            "type": "String",
+            "type": "string",
             "value": "[variables('manager_sub0').ucpHostname]"
         },
         "mgr_dtr_pip": {
-            "type": "String",
+            "type": "string",
             "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameDtr)).ipAddress]"
         },
         "mgr_dtr_hostname": {
-            "type": "String",
+            "type": "string",
             "value": "[variables('manager_sub0').dtrHostname]"
         },
         "wrk_pip": {
-            "type": "String",
+            "type": "string",
             "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('worker').publicIPAddressName)).ipAddress]"
         }
     }
