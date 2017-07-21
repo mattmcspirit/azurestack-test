@@ -13,8 +13,6 @@ DTR_VERSION=$5
 echo "DTR_VERSION: $DTR_VERSION"
 DOCKER_VERSION=$6
 echo "DOCKER_VERSION: $DOCKER_VERSION"
-HUB_PASSWORD=$7
-HUB_USERNAME=$8
 
 # 2ND SECTION - CHECK VARIABLES EXIST
 
@@ -33,10 +31,6 @@ if [ -z "$DTR_PUBLIC_FQDN" ]; then
     exit 1
 fi
 
-if [ -z "$HUB_USERNAME" ]; then
-    echo 'HUB_USERNAME is undefined'
-    exit 1
-fi
 
 # 3RD SECTION - INSTALL DOCKER
 
