@@ -64,15 +64,17 @@ sleep 10
 echo "UCP_PUBLIC_FQDN=$UCP_PUBLIC_FQDN"
 service docker restart
 
-docker login -p $HUB_PASSWORD -u $HUB_USERNAME
+#docker login -p $HUB_PASSWORD -u $HUB_USERNAME
 
-docker run dockerorcadev/ucp:$UCP_VERSION images --list --image-version dev: | xargs -L 1 docker pull
+#docker run dockerorcadev/ucp:$UCP_VERSION images --list --image-version dev: | xargs -L 1 docker pull
+
+docker pull docker/ucp:$UCP_VERSION
 
 docker run --rm --name ucp \
-  -e REGISTRY_USERNAME=$HUB_USERNAME -e REGISTRY_PASSWORD=$HUB_PASSWORD \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  dockerorcadev/ucp:$UCP_VERSION \
+  docker/ucp:$UCP_VERSION \
   install --san $UCP_PUBLIC_FQDN --admin-password $UCP_ADMIN_PASSWORD --debug
+
 sleep 10
 
 # 5TH SECTION - INSTALL DTR
@@ -81,8 +83,6 @@ if [ -z "$UCP_NODE"]; then
   export UCP_NODE=$(docker node ls | grep mgr0 | awk '{print $3}');
 fi
 
-service docker restart
-docker login -p $HUB_PASSWORD -u $HUB_USERNAME
 docker run --rm \
   docker/dtr:$DTR_VERSION install \
   --ucp-url $UCP_PUBLIC_FQDN \
@@ -91,5 +91,3 @@ docker run --rm \
   --ucp-username admin --ucp-password $UCP_ADMIN_PASSWORD \
   --ucp-insecure-tls \
   --replica-https-port 8443 \
-  --hub-username $HUB_USERNAME \
-  --hub-password $HUB_PASSWORD
