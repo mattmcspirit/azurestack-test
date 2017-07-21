@@ -14,9 +14,7 @@ echo "DTR_VERSION: $DTR_VERSION"
 DOCKER_VERSION=$6
 echo "DOCKER_VERSION: $DOCKER_VERSION"
 HUB_PASSWORD=$7
-echo "HUB_PASSWORD: $HUB_PASSWORD"
 HUB_USERNAME=$8
-echo "HUB_USERNAME: $HUB_USERNAME"
 
 # 2ND SECTION - CHECK VARIABLES EXIST
 
@@ -63,6 +61,7 @@ sleep 10
 
 echo "UCP_PUBLIC_FQDN=$UCP_PUBLIC_FQDN"
 service docker restart
+sleep 10
 
 #docker login -p $HUB_PASSWORD -u $HUB_USERNAME
 
@@ -82,6 +81,8 @@ sleep 10
 if [ -z "$UCP_NODE"]; then
   export UCP_NODE=$(docker node ls | grep mgr0 | awk '{print $3}');
 fi
+
+docker pull docker/dtr:2.3.0-beta1
 
 docker run --rm \
   docker/dtr:$DTR_VERSION install \
