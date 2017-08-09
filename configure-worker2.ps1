@@ -48,7 +48,7 @@ function Get-UcpImages() {
     docker pull docker/ucp-dsinfo-win:$UcpVersion
     docker pull docker/ucp-agent-win:$UcpVersion
 
-    Add-Content setup.ps1 $(docker run --rm docker/ucp-agent-win:$UcpVersion windows-script --image-version $UcpVersion:)
+    Add-Content setup.ps1 $(docker run --rm docker/ucp-agent-win:$UcpVersion windows-script --image-version $UcpVersion)
     & .\setup.ps1
     Remove-Item -Force setup.ps1
 }
