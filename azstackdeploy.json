@@ -871,7 +871,7 @@
                     ]
                 },
                 "protectedSettings": {
-                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File configure-worker2.ps1 -DockerVersion ', parameters('dockerVersion'), ' -UcpVersion ', parameters('ucpVersion'), ' -DTRFQDN ', variables('manager_sub0').dtrHostname)]"
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File configure-worker.ps1 -DockerVersion ', parameters('dockerVersion'), ' -UcpVersion ', parameters('ucpVersion'), ' -DTRFQDN ', variables('manager_sub0').dtrHostname)]"
                 }
             },
             "dependsOn": [
