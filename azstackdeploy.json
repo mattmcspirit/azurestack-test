@@ -1,866 +1,904 @@
 {
-	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-	"contentVersion": "1.0.0.0",
-	"parameters": {
-		"prefix": {
-			"minLength": 3,
-			"maxLength": 7,
-			"type": "string",
-			"metadata": {
-				"description": "Prefix used for all resources"
-			}
-		},
-		"adminUsername": {
-			"type": "string",
-			"metadata": {
-				"description": "Admin username"
-			}
-		},
-		"dtrVersion": {
-			"type": "string",
-			"metadata": {
-				"description": "DTR Version"
-			}
-		},
-		"ucpVersion": {
-			"type": "string",
-			"metadata": {
-				"description": "UCP Version"
-			}
-		},
-		"dockerVersion": {
-			"type": "string",
-			"metadata": {
-				"description": "Docker Version"
-			}
-		},
-		"adminPassword": {
-			"type": "securestring",
-			"metadata": {
-				"description": "Admin password"
-			}
-		},
-		"sshPublicKey": {
-			"type": "string",
-			"metadata": {
-				"description": "SSH public key"
-			}
-		},
-		"vmSize": {
-			"defaultValue": "Standard_D2_v2",
-			"type": "string",
-			"metadata": {
-				"description": "Size of the VM"
-			}
-		},
-		"managerCount": {
-			"defaultValue": 1,
-			"type": "int",
-			"metadata": {
-				"description": "Number of worker nodes"
-			}
-		},
-		"workerCount": {
-			"defaultValue": 3,
-			"type": "int",
-			"metadata": {
-				"description": "Number of worker nodes"
-			}
-		},
-		"dnsFqdnSuffix": {
-			"defaultValue": "cloudapp.azurestack.external",
-			"allowedValues": [
-				"cloudapp.azurestack.external",
-				"cloudapp.azure.com",
-				"cloudapp.usgovcloudapi.net"
-			],
-			"type": "string"
-		},
-		"artifactBaseUri": {
-			"defaultValue": "https://raw.githubusercontent.com/uday-shetty/azurestack-test/master/",
-			"type": "string"
-		}
-	},
-	"variables": {
-		"prefix": "[parameters('prefix')]",
-		"manager": {
-			"vmNamePrefix": "[concat(variables('prefix'), '-mgr')]",
-			"imagePublisher": "Canonical",
-			"imageOffer": "UbuntuServer",
-			"imageSKU": "16.04-LTS",
-			"count": "[parameters('managerCount')]",
-			"availabilitySetName": "[concat(variables('prefix'), '_mgr_as')]",
-			"lbName": "[concat(variables('prefix'), '_mgr_lb')]",
-			"nicNamePrefix": "[concat(variables('prefix'), '_mgr_nic')]",
-			"publicIPAddressNameUcp": "[concat(variables('prefix'), '_mgr_ucp_pip')]",
-			"publicIPAddressNameDtr": "[concat(variables('prefix'), '_mgr_dtr_pip')]",
-			"publicIPAddressNameApp": "[concat(variables('prefix'), '_mgr_app_pip')]",
-			"dnsNameforUcp": "[concat(variables('prefix'),'-ucp-',uniqueString(resourceGroup().id))]",
-			"dnsNameforDtr": "[concat(variables('prefix'),'-dtr-',uniqueString(resourceGroup().id))]",
-			"dnsNameforApp": "[concat(variables('prefix'),'-app-',uniqueString(resourceGroup().id))]"
-		},
-		"manager_sub0": {
-			"lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('manager').lbName)]",
-			"publicIPAddressIDUcp": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameUcp)]",
-			"publicIPAddressIDDtr": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameDtr)]",
-			"publicIPAddressIDApp": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameApp)]",
-			"ucpHostname": "[concat(variables('manager').dnsNameforUcp, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]",
-			"dtrHostname": "[concat(variables('manager').dnsNameforDtr, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]",
-			"appHostname": "[concat(variables('manager').dnsNameforApp, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]"
-		},
-		"manager_sub1": {
-			"frontEndIPConfigIDUcp": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndUcp')]",
-			"frontEndIPConfigIDDtr": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndDtr')]",
-			"frontEndIPConfigIDApp": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndApp')]",
-			"lbPoolID": "[concat(variables('manager_sub0').lbID,'/backendAddressPools/BackendPool1')]",
-			"lbDtrPoolID": "[concat(variables('manager_sub0').lbID,'/backendAddressPools/BackendPool2')]",
-			"lbProbeID": "[concat(variables('manager_sub0').lbID,'/probes/ucp')]"
-		},
-		"worker": {
-			"vmNamePrefix": "[concat(variables('prefix'), '-wrk')]",
-			"imagePublisher": "MicrosoftWindowsServer",
-			"imageOffer": "WindowsServer",
-			"imageSKU": "2016-Datacenter",
-			"count": "[parameters('workerCount')]",
-			"availabilitySetName": "[concat(variables('prefix'), '_wrk_as')]",
-			"lbName": "[concat(variables('prefix'), '_wrk_lb')]",
-			"nicNamePrefix": "[concat(variables('prefix'), '_wrk_nic')]",
-			"publicIPAddressName": "[concat(variables('prefix'), '_wrk_pip')]",
-			"publicIPAddressDnsName": "[concat(variables('prefix'),'-wrk-',uniqueString(resourceGroup().id))]"
-		},
-		"worker_sub0": {
-			"lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('worker').lbName)]",
-			"publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('worker').publicIPAddressName)]"
-		},
-		"worker_sub1": {
-			"frontEndIPConfigID": "[concat(variables('worker_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
-			"lbPoolID": "[concat(variables('worker_sub0').lbID,'/backendAddressPools/BackendPool1')]",
-			"lbProbeID": "[concat(variables('worker_sub0').lbID,'/probes/tcpProbe')]",
-			"lbProbe443ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp443Probe')]",
-			"lbProbe8080ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8080Probe')]",
-			"lbProbe8081ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8081Probe')]",
-			"lbProbe8082ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8082Probe')]"
-		},
-		"storageAccountName": "[concat(variables('prefix'),uniqueString(concat(resourceGroup().id, '0')))]",
-		"storageAccountType": "Standard_LRS",
-		"storageLocation": "[resourceGroup().location]",
-		"addressPrefix": "10.0.0.0/16",
-		"subnetName": "Subnet",
-		"subnetPrefix": "10.0.144.0/24",
-		"subnetRef": "[concat(variables('vnetID'),'/subnets/',variables ('subnetName'))]",
-		"publicIPAddressType": "Static",
-		"vnetName": "[concat(variables('prefix'), '_vnet')]",
-		"vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]",
-		"nsgName": "[concat(variables('prefix'), '_nsg')]",
-		"sshKeyPath": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
-		"vhdContainerName": "vhd"
-	},
-	"resources": [{
-			"type": "Microsoft.Storage/storageAccounts",
-			"name": "[variables('storageAccountName')]",
-			"apiVersion": "2015-06-15",
-			"location": "[variables('storageLocation')]",
-			"properties": {
-				"accountType": "[variables('storageAccountType')]"
-			}
-		},
-		{
-			"type": "Microsoft.Compute/availabilitySets",
-			"name": "[variables('manager').availabilitySetName]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"platformUpdateDomainCount": 1,
-				"platformFaultDomainCount": 1
-			}
-		},
-		{
-			"type": "Microsoft.Compute/availabilitySets",
-			"name": "[variables('worker').availabilitySetName]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"platformUpdateDomainCount": 1,
-				"platformFaultDomainCount": 1
-			}
-		},
-		{
-			"type": "Microsoft.Network/publicIPAddresses",
-			"name": "[variables('manager').publicIPAddressNameUcp]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"publicIPAllocationMethod": "[variables('publicIPAddressType')]",
-				"dnsSettings": {
-					"domainNameLabel": "[variables('manager').dnsNameforUcp]"
-				}
-			}
-		},
-		{
-			"type": "Microsoft.Network/publicIPAddresses",
-			"name": "[variables('manager').publicIPAddressNameDtr]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"publicIPAllocationMethod": "[variables('publicIPAddressType')]",
-				"dnsSettings": {
-					"domainNameLabel": "[variables('manager').dnsNameforDtr]"
-				}
-			}
-		},
-		{
-			"type": "Microsoft.Network/publicIPAddresses",
-			"name": "[variables('manager').publicIPAddressNameApp]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"publicIPAllocationMethod": "[variables('publicIPAddressType')]",
-				"dnsSettings": {
-					"domainNameLabel": "[variables('manager').dnsNameforApp]"
-				}
-			}
-		},
-		{
-			"type": "Microsoft.Network/publicIPAddresses",
-			"name": "[variables('worker').publicIPAddressName]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"publicIPAllocationMethod": "[variables('publicIPAddressType')]",
-				"dnsSettings": {
-					"domainNameLabel": "[variables('worker').publicIPAddressDnsName]"
-				}
-			}
-		},
-		{
-			"type": "Microsoft.Network/virtualNetworks",
-			"name": "[variables('vnetName')]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"addressSpace": {
-					"addressPrefixes": [
-						"[variables('addressPrefix')]"
-					]
-				},
-				"subnets": [{
-					"name": "[variables('subnetName')]",
-					"properties": {
-						"addressPrefix": "[variables('subnetPrefix')]"
-					}
-				}]
-			}
-		},
-		{
-			"type": "Microsoft.Network/networkSecurityGroups",
-			"name": "[variables('nsgName')]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"securityRules": [{
-						"name": "ssh",
-						"properties": {
-							"access": "Allow",
-							"description": "Allow SSH",
-							"destinationAddressPrefix": "*",
-							"destinationPortRange": "22",
-							"direction": "Inbound",
-							"priority": 201,
-							"protocol": "Tcp",
-							"sourceAddressPrefix": "*",
-							"sourcePortRange": "*"
-						}
-					},
-					{
-						"name": "ucp",
-						"properties": {
-							"access": "Allow",
-							"description": "Allow UCP",
-							"destinationAddressPrefix": "*",
-							"destinationPortRange": "12390",
-							"direction": "Inbound",
-							"priority": 206,
-							"protocol": "Tcp",
-							"sourceAddressPrefix": "*",
-							"sourcePortRange": "*"
-						}
-					},
-					{
-						"name": "dtr",
-						"properties": {
-							"access": "Allow",
-							"description": "Allow DTR",
-							"destinationAddressPrefix": "*",
-							"destinationPortRange": "12391",
-							"direction": "Inbound",
-							"priority": 207,
-							"protocol": "Tcp",
-							"sourceAddressPrefix": "*",
-							"sourcePortRange": "*"
-						}
-					},
-					{
-						"name": "dtrhttp",
-						"properties": {
-							"access": "Allow",
-							"description": "Allow DTR",
-							"destinationAddressPrefix": "*",
-							"destinationPortRange": "12392",
-							"direction": "Inbound",
-							"priority": 208,
-							"protocol": "Tcp",
-							"sourceAddressPrefix": "*",
-							"sourcePortRange": "*"
-						}
-					}
-				]
-			}
-		},
-		{
-			"type": "Microsoft.Network/networkInterfaces",
-			"name": "[concat(variables('manager').nicNamePrefix, copyindex())]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "nicLoop",
-				"count": "[variables('manager').count]"
-			},
-			"properties": {
-				"ipConfigurations": [{
-					"name": "ipconfig1",
-					"properties": {
-						"privateIPAllocationMethod": "Static",
-						"privateIPAddress": "[concat('10.0.144.', add(5, copyindex()))]",
-						"subnet": {
-							"id": "[variables('subnetRef')]"
-						},
-						"loadBalancerBackendAddressPools": [{
-							"id": "[concat(variables('manager_sub0').lbID, '/backendAddressPools/BackendPool1')]"
-						}],
-						"loadBalancerInboundNatRules": [{
-							"id": "[concat(variables('manager_sub0').lbID,'/inboundNatRules/default.',copyIndex())]"
-						}]
-					}
-				}]
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]",
-				"[concat('Microsoft.Network/loadBalancers/', variables('manager').lbName)]"
-			]
-		},
-		{
-			"type": "Microsoft.Network/networkInterfaces",
-			"name": "[concat(variables('worker').nicNamePrefix, copyindex())]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "nicLoop",
-				"count": "[variables('worker').count]"
-			},
-			"properties": {
-				"ipConfigurations": [{
-					"name": "ipconfig1",
-					"properties": {
-						"privateIPAllocationMethod": "Static",
-						"privateIPAddress": "[concat('10.0.144.', add(variables('manager').count, add(5, copyindex())))]",
-						"subnet": {
-							"id": "[variables('subnetRef')]"
-						},
-						"loadBalancerBackendAddressPools": [{
-							"id": "[concat(variables('worker_sub0').lbID, '/backendAddressPools/BackendPool1')]"
-						}],
-						"loadBalancerInboundNatRules": [{
-							"id": "[concat(variables('worker_sub0').lbID,'/inboundNatRules/default.', copyindex())]"
-						}]
-					}
-				}]
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]",
-				"[concat('Microsoft.Network/loadBalancers/', variables('worker').lbName)]"
-			]
-		},
-		{
-			"type": "Microsoft.Network/loadBalancers",
-			"name": "[variables('manager').lbName]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"frontendIPConfigurations": [{
-						"name": "LoadBalancerFrontEndUcp",
-						"properties": {
-							"publicIPAddress": {
-								"id": "[variables('manager_sub0').publicIPAddressIDUcp]"
-							}
-						}
-					},
-					{
-						"name": "LoadBalancerFrontEndDtr",
-						"properties": {
-							"publicIPAddress": {
-								"id": "[variables('manager_sub0').publicIPAddressIDDtr]"
-							}
-						}
-					},
-					{
-						"name": "LoadBalancerFrontEndApp",
-						"properties": {
-							"publicIPAddress": {
-								"id": "[variables('manager_sub0').publicIPAddressIDApp]"
-							}
-						}
-					}
-				],
-				"backendAddressPools": [{
-					"name": "BackendPool1"
-				}],
-				"inboundNatRules": [{
-						"name": "default.0",
-						"properties": {
-							"backendPort": 22,
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
-							},
-							"frontendPort": 50000,
-							"protocol": "tcp"
-						}
-					},
-					{
-						"name": "default.1",
-						"properties": {
-							"backendPort": 22,
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
-							},
-							"frontendPort": 50001,
-							"protocol": "tcp"
-						}
-					},
-					{
-						"name": "default.2",
-						"properties": {
-							"backendPort": 22,
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
-							},
-							"frontendPort": 50002,
-							"protocol": "tcp"
-						}
-					}
-				],
-				"loadBalancingRules": [{
-						"name": "LBRule",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
-							},
-							"backendAddressPool": {
-								"id": "[variables('manager_sub1').lbPoolID]"
-							},
-							"protocol": "Tcp",
-							"frontendPort": 443,
-							"backendPort": 12390,
-							"enableFloatingIP": false,
-							"idleTimeoutInMinutes": 5,
-							"probe": {
-								"id": "[variables('manager_sub1').lbProbeID]"
-							}
-						}
-					},
-					{
-						"name": "LBRuleDtr",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDDtr]"
-							},
-							"backendAddressPool": {
-								"id": "[variables('manager_sub1').lbPoolID]"
-							},
-							"protocol": "Tcp",
-							"frontendPort": 443,
-							"backendPort": 12391,
-							"enableFloatingIP": false,
-							"idleTimeoutInMinutes": 5,
-							"probe": {
-								"id": "[variables('manager_sub1').lbProbeID]"
-							}
-						}
-					},
-					{
-						"name": "LBRuleApp",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('manager_sub1').frontEndIPConfigIDApp]"
-							},
-							"backendAddressPool": {
-								"id": "[variables('manager_sub1').lbPoolID]"
-							},
-							"protocol": "Tcp",
-							"frontendPort": 80,
-							"backendPort": 80,
-							"enableFloatingIP": false,
-							"idleTimeoutInMinutes": 5,
-							"probe": {
-								"id": "[variables('manager_sub1').lbProbeID]"
-							}
-						}
-					}
-				],
-				"probes": [{
-						"name": "default",
-						"properties": {
-							"intervalInSeconds": 10,
-							"numberOfProbes": 2,
-							"port": 22,
-							"protocol": "Tcp"
-						}
-					},
-					{
-						"name": "ucp",
-						"properties": {
-							"intervalInSeconds": 10,
-							"numberOfProbes": 2,
-							"port": 12390,
-							"protocol": "Tcp"
-						}
-					},
-					{
-						"name": "dtr",
-						"properties": {
-							"intervalInSeconds": 10,
-							"numberOfProbes": 2,
-							"port": 12391,
-							"protocol": "Tcp"
-						}
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Network/publicIPAddresses/', variables('manager').publicIPAddressNameUcp)]",
-				"[concat('Microsoft.Network/publicIPAddresses/', variables('manager').publicIPAddressNameDtr)]"
-			]
-		},
-		{
-			"type": "Microsoft.Network/loadBalancers",
-			"name": "[variables('worker').lbName]",
-			"apiVersion": "2015-05-01-preview",
-			"location": "[resourceGroup().location]",
-			"properties": {
-				"frontendIPConfigurations": [{
-					"name": "LoadBalancerFrontEnd",
-					"properties": {
-						"publicIPAddress": {
-							"id": "[variables('worker_sub0').publicIPAddressID]"
-						}
-					}
-				}],
-				"backendAddressPools": [{
-					"name": "BackendPool1"
-				}],
-				"inboundNatRules": [{
-						"name": "default.0",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('worker_sub1').frontEndIPConfigID]"
-							},
-							"protocol": "tcp",
-							"frontendPort": 50000,
-							"backendPort": 3389,
-							"enableFloatingIP": false
-						}
-					},
-					{
-						"name": "default.1",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('worker_sub1').frontEndIPConfigID]"
-							},
-							"protocol": "tcp",
-							"frontendPort": 50001,
-							"backendPort": 3389,
-							"enableFloatingIP": false
-						}
-					},
-					{
-						"name": "default.2",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('worker_sub1').frontEndIPConfigID]"
-							},
-							"protocol": "tcp",
-							"frontendPort": 50002,
-							"backendPort": 3389,
-							"enableFloatingIP": false
-						}
-					}
-				],
-				"loadBalancingRules": [{
-						"name": "LBRule",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('worker_sub1').frontEndIPConfigID]"
-							},
-							"backendAddressPool": {
-								"id": "[variables('worker_sub1').lbPoolID]"
-							},
-							"protocol": "Tcp",
-							"frontendPort": 80,
-							"backendPort": 80,
-							"enableFloatingIP": false,
-							"idleTimeoutInMinutes": 5,
-							"probe": {
-								"id": "[variables('worker_sub1').lbProbeID]"
-							}
-						}
-					},
-					{
-						"name": "LBRule443",
-						"properties": {
-							"frontendIPConfiguration": {
-								"id": "[variables('worker_sub1').frontEndIPConfigID]"
-							},
-							"backendAddressPool": {
-								"id": "[variables('worker_sub1').lbPoolID]"
-							},
-							"protocol": "Tcp",
-							"frontendPort": 443,
-							"backendPort": 443,
-							"enableFloatingIP": false,
-							"idleTimeoutInMinutes": 5,
-							"probe": {
-								"id": "[variables('worker_sub1').lbProbe443ID]"
-							}
-						}
-					}
-				],
-				"probes": [{
-						"name": "tcpProbe",
-						"properties": {
-							"protocol": "Tcp",
-							"port": 80,
-							"intervalInSeconds": 5,
-							"numberOfProbes": 2
-						}
-					},
-					{
-						"name": "tcp443Probe",
-						"properties": {
-							"protocol": "Tcp",
-							"port": 443,
-							"intervalInSeconds": 5,
-							"numberOfProbes": 2
-						}
-					}
-				]
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Network/publicIPAddresses/', variables('worker').publicIPAddressName)]"
-			]
-		},
-		{
-			"type": "Microsoft.Compute/virtualMachines",
-			"name": "[concat(variables('manager').vmNamePrefix, copyindex())]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "virtualMachineLoop",
-				"count": "[variables('manager').count]"
-			},
-			"properties": {
-				"availabilitySet": {
-					"id": "[resourceId('Microsoft.Compute/availabilitySets',variables('manager').availabilitySetName)]"
-				},
-				"hardwareProfile": {
-					"vmSize": "[parameters('vmSize')]"
-				},
-				"osProfile": {
-					"computerName": "[concat(variables('manager').vmNamePrefix, copyIndex())]",
-					"adminUsername": "[parameters('adminUsername')]",
-					"adminPassword": "[parameters('adminPassword')]",
-					"linuxConfiguration": {
-						"disablePasswordAuthentication": true,
-						"ssh": {
-							"publicKeys": [{
-								"keyData": "[parameters('sshPublicKey')]",
-								"path": "[variables('sshKeyPath')]"
-							}]
-						}
-					}
-				},
-				"storageProfile": {
-					"imageReference": {
-						"publisher": "[variables('manager').imagePublisher]",
-						"offer": "[variables('manager').imageOffer]",
-						"sku": "[variables('manager').imageSKU]",
-						"version": "1.0.2"
-					},
-					"osDisk": {
-						"name": "osdiskmgr",
-						"vhd": {
-							"uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('manager').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
-						},
-						"caching": "ReadWrite",
-						"createOption": "FromImage"
-					}
-				},
-				"networkProfile": {
-					"networkInterfaces": [{
-						"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('manager').nicNamePrefix, copyindex()))]",
-						"properties": {
-							"primary": true
-						}
-					}]
-				},
-				"diagnosticsProfile": {
-					"bootDiagnostics": {
-						"enabled": "false"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-				"[concat('Microsoft.Network/networkInterfaces/', variables('manager').nicNamePrefix, copyindex())]",
-				"[concat('Microsoft.Compute/availabilitySets/', variables('manager').availabilitySetName)]"
-			]
-		},
-		{
-			"type": "Microsoft.Compute/virtualMachines",
-			"name": "[concat(variables('worker').vmNamePrefix, copyindex())]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "virtualMachineLoop",
-				"count": "[variables('worker').count]"
-			},
-			"properties": {
-				"availabilitySet": {
-					"id": "[resourceId('Microsoft.Compute/availabilitySets',variables('worker').availabilitySetName)]"
-				},
-				"hardwareProfile": {
-					"vmSize": "[parameters('vmSize')]"
-				},
-				"osProfile": {
-					"computerName": "[concat(variables('worker').vmNamePrefix, copyIndex())]",
-					"adminUsername": "[parameters('adminUsername')]",
-					"adminPassword": "[parameters('adminPassword')]"
-				},
-				"storageProfile": {
-					"imageReference": {
-						"publisher": "[variables('worker').imagePublisher]",
-						"offer": "[variables('worker').imageOffer]",
-						"sku": "[variables('worker').imageSKU]",
-						"version": "latest"
-					},
-					"osDisk": {
-						"name": "osdiskwrk",
-						"vhd": {
-							"uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('worker').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
-						},
-						"caching": "ReadWrite",
-						"createOption": "FromImage"
-					},
-					"dataDisks": []
-				},
-				"networkProfile": {
-					"networkInterfaces": [{
-						"id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('worker').nicNamePrefix, copyindex()))]"
-					}]
-				},
-				"diagnosticsProfile": {
-					"bootDiagnostics": {
-						"enabled": "false"
-					}
-				}
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
-				"[concat('Microsoft.Network/networkInterfaces/', variables('worker').nicNamePrefix, copyindex())]",
-				"[concat('Microsoft.Compute/availabilitySets/', variables('worker').availabilitySetName)]"
-			]
-		},
-		{
-			"type": "Microsoft.Compute/virtualMachines/extensions",
-			"name": "[concat(variables('manager').vmNamePrefix, copyIndex(), '/mgr_scriptextension')]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "VirtualMachineScriptExtensionLoop",
-				"count": "[variables('manager').count]"
-			},
-			"tags": {
-				"displayName": "[concat(variables('prefix'), '_mgr_', 'extension')]"
-			},
-			"properties": {
-				"publisher": "Microsoft.OSTCExtensions",
-				"type": "CustomScriptForLinux",
-				"typeHandlerVersion": "1.5",
-				"autoUpgradeMinorVersion": "true",
-				"settings": {
-					"fileUris": [
-						"[concat(parameters('artifactBaseUri'), 'interfaces')]",
-						"[concat(parameters('artifactBaseUri'), 'set-static-ip.sh')]",
-						"[concat(parameters('artifactBaseUri'), 'install-dockeronenode.sh')]"
-					]
-				},
-				"protectedSettings": {
-					"commandToExecute": "[concat('bash install-dockeronenode.sh ', variables('manager_sub0').ucpHostname, ' ', variables('manager_sub0').dtrHostname, ' ', parameters('adminPassword'), ' ', parameters('ucpVersion'), ' ', parameters('dtrVersion'), ' ', parameters('dockerVersion'))]"
-				}
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Compute/virtualMachines/', variables('manager').vmNamePrefix, copyindex())]"
-			]
-		},
-		{
-			"type": "Microsoft.Compute/virtualMachines/extensions",
-			"name": "[concat(variables('worker').vmNamePrefix, copyIndex(), '/wrk_scriptextension')]",
-			"apiVersion": "2015-06-15",
-			"location": "[resourceGroup().location]",
-			"copy": {
-				"name": "VirtualMachineScriptExtensionLoop",
-				"count": "[variables('worker').count]"
-			},
-			"tags": {
-				"displayName": "[concat(variables('prefix'), '_wrk_', 'extension')]"
-			},
-			"properties": {
-				"publisher": "Microsoft.Compute",
-				"type": "CustomScriptExtension",
-				"typeHandlerVersion": "1.8",
-				"autoUpgradeMinorVersion": true,
-				"settings": {
-					"fileUris": [
-						"[concat(parameters('artifactBaseUri'), 'configure-worker.ps1')]"
-					]
-				},
-				"protectedSettings": {
-					"commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File configure-worker.ps1 -DockerVersion ', parameters('dockerVersion'), ' -UcpVersion ', parameters('ucpVersion'), ' -DTRFQDN ', variables('manager_sub0').dtrHostname)]"
-				}
-			},
-			"dependsOn": [
-				"[concat('Microsoft.Compute/virtualMachines/', variables('worker').vmNamePrefix, copyindex())]"
-			]
-		}
-	],
-	"outputs": {
-		"mgr_ucp_pip": {
-			"type": "string",
-			"value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameUcp)).ipAddress]"
-		},
-		"mgr_ucp_hostname": {
-			"type": "string",
-			"value": "[variables('manager_sub0').ucpHostname]"
-		},
-		"mgr_dtr_pip": {
-			"type": "string",
-			"value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameDtr)).ipAddress]"
-		},
-		"mgr_dtr_hostname": {
-			"type": "string",
-			"value": "[variables('manager_sub0').dtrHostname]"
-		},
-		"wrk_pip": {
-			"type": "string",
-			"value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('worker').publicIPAddressName)).ipAddress]"
-		}
-	}
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "prefix": {
+            "minLength": 3,
+            "maxLength": 7,
+            "type": "string",
+            "metadata": {
+                "description": "Prefix used for all resources"
+            }
+        },
+        "adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Admin username"
+            }
+        },
+        "dtrVersion": {
+            "defaultValue": "2.3.0-beta1",
+            "type": "string",
+            "metadata": {
+                "description": "DTR Version"
+            }
+        },
+        "ucpVersion": {
+            "defaultValue": "2.2.0-beta1",
+            "type": "string",
+            "metadata": {
+                "description": "UCP Version"
+            }
+        },
+        "dockerVersion": {
+            "defaultValue": "17.06.0-ce",
+            "type": "string",
+            "metadata": {
+                "description": "Docker Version"
+            }
+        },
+        "adminPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "Admin password"
+            }
+        },
+        "sshPublicKey": {
+            "type": "string",
+            "metadata": {
+                "description": "SSH public key"
+            }
+        },
+        "vmSize": {
+            "defaultValue": "Standard_D2_v2",
+            "type": "string",
+            "metadata": {
+                "description": "Size of the VM"
+            }
+        },
+        "managerCount": {
+            "defaultValue": 1,
+            "type": "int",
+            "metadata": {
+                "description": "Number of worker nodes"
+            }
+        },
+        "workerCount": {
+            "defaultValue": 1,
+            "type": "int",
+            "metadata": {
+                "description": "Number of worker nodes"
+            }
+        },
+        "dnsFqdnSuffix": {
+            "defaultValue": "cloudapp.azurestack.external",
+            "allowedValues": [
+                "cloudapp.azurestack.external",
+                "cloudapp.azure.com",
+                "cloudapp.usgovcloudapi.net"
+            ],
+            "type": "string"
+        },
+        "artifactBaseUri": {
+            "defaultValue": "https://raw.githubusercontent.com/uday-shetty/azurestack-test/master/",
+            "type": "string"
+        }
+    },
+    "variables": {
+        "prefix": "[parameters('prefix')]",
+        "manager": {
+            "vmNamePrefix": "[concat(variables('prefix'), '-mgr')]",
+            "imagePublisher": "Canonical",
+            "imageOffer": "UbuntuServer",
+            "imageSKU": "16.04-LTS",
+            "count": "[parameters('managerCount')]",
+            "availabilitySetName": "[concat(variables('prefix'), '_mgr_as')]",
+            "lbName": "[concat(variables('prefix'), '_mgr_lb')]",
+            "nicNamePrefix": "[concat(variables('prefix'), '_mgr_nic')]",
+            "publicIPAddressNameUcp": "[concat(variables('prefix'), '_mgr_ucp_pip')]",
+            "publicIPAddressNameDtr": "[concat(variables('prefix'), '_mgr_dtr_pip')]",
+            "publicIPAddressNameApp": "[concat(variables('prefix'), '_mgr_app_pip')]",
+            "dnsNameforUcp": "[concat(variables('prefix'),'-ucp-',uniqueString(resourceGroup().id))]",
+            "dnsNameforDtr": "[concat(variables('prefix'),'-dtr-',uniqueString(resourceGroup().id))]",
+            "dnsNameforApp": "[concat(variables('prefix'),'-app-',uniqueString(resourceGroup().id))]"
+        },
+        "manager_sub0": {
+            "lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('manager').lbName)]",
+            "publicIPAddressIDUcp": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameUcp)]",
+            "publicIPAddressIDDtr": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameDtr)]",
+            "publicIPAddressIDApp": "[resourceId('Microsoft.Network/publicIPAddresses',variables('manager').publicIPAddressNameApp)]",
+            "ucpHostname": "[concat(variables('manager').dnsNameforUcp, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]",
+            "dtrHostname": "[concat(variables('manager').dnsNameforDtr, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]",
+            "appHostname": "[concat(variables('manager').dnsNameforApp, '.', resourceGroup().location, '.', parameters('dnsFqdnSuffix'))]"
+        },
+        "manager_sub1": {
+            "frontEndIPConfigIDUcp": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndUcp')]",
+            "frontEndIPConfigIDDtr": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndDtr')]",
+            "frontEndIPConfigIDApp": "[concat(variables('manager_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEndApp')]",
+            "lbPoolID": "[concat(variables('manager_sub0').lbID,'/backendAddressPools/BackendPool1')]",
+            "lbDtrPoolID": "[concat(variables('manager_sub0').lbID,'/backendAddressPools/BackendPool2')]",
+            "lbProbeID": "[concat(variables('manager_sub0').lbID,'/probes/ucp')]"
+        },
+        "worker": {
+            "vmNamePrefix": "[concat(variables('prefix'), '-wrk')]",
+            "imagePublisher": "MicrosoftWindowsServer",
+            "imageOffer": "WindowsServer",
+            "imageSKU": "2016-Datacenter-with-Containers",
+            "count": "[parameters('workerCount')]",
+            "availabilitySetName": "[concat(variables('prefix'), '_wrk_as')]",
+            "lbName": "[concat(variables('prefix'), '_wrk_lb')]",
+            "nicNamePrefix": "[concat(variables('prefix'), '_wrk_nic')]",
+            "publicIPAddressName": "[concat(variables('prefix'), '_wrk_pip')]",
+            "publicIPAddressDnsName": "[concat(variables('prefix'),'-wrk-',uniqueString(resourceGroup().id))]"
+        },
+        "worker_sub0": {
+            "lbID": "[resourceId('Microsoft.Network/loadBalancers',variables('worker').lbName)]",
+            "publicIPAddressID": "[resourceId('Microsoft.Network/publicIPAddresses',variables('worker').publicIPAddressName)]"
+        },
+        "worker_sub1": {
+            "frontEndIPConfigID": "[concat(variables('worker_sub0').lbID,'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+            "lbPoolID": "[concat(variables('worker_sub0').lbID,'/backendAddressPools/BackendPool1')]",
+            "lbProbeID": "[concat(variables('worker_sub0').lbID,'/probes/tcpProbe')]",
+            "lbProbe443ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp443Probe')]",
+            "lbProbe8080ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8080Probe')]",
+            "lbProbe8081ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8081Probe')]",
+            "lbProbe8082ID": "[concat(variables('worker_sub0').lbID,'/probes/tcp8082Probe')]"
+        },
+        "storageAccountName": "[concat(variables('prefix'),uniqueString(concat(resourceGroup().id, '0')))]",
+        "storageAccountType": "Standard_LRS",
+        "storageLocation": "[resourceGroup().location]",
+        "addressPrefix": "10.0.0.0/16",
+        "subnetName": "Subnet",
+        "subnetPrefix": "10.0.144.0/24",
+        "subnetRef": "[concat(variables('vnetID'),'/subnets/',variables ('subnetName'))]",
+        "publicIPAddressType": "Static",
+        "vnetName": "[concat(variables('prefix'), '_vnet')]",
+        "vnetID": "[resourceId('Microsoft.Network/virtualNetworks',variables('vnetName'))]",
+        "nsgName": "[concat(variables('prefix'), '_nsg')]",
+        "sshKeyPath": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+        "vhdContainerName": "vhd"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageAccountName')]",
+            "apiVersion": "2015-06-15",
+            "location": "[variables('storageLocation')]",
+            "properties": {
+                "accountType": "[variables('storageAccountType')]"
+            }
+        },
+        {
+            "type": "Microsoft.Compute/availabilitySets",
+            "name": "[variables('manager').availabilitySetName]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "platformUpdateDomainCount": 1,
+                "platformFaultDomainCount": 1
+            }
+        },
+        {
+            "type": "Microsoft.Compute/availabilitySets",
+            "name": "[variables('worker').availabilitySetName]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "platformUpdateDomainCount": 1,
+                "platformFaultDomainCount": 1
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('manager').publicIPAddressNameUcp]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('manager').dnsNameforUcp]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('manager').publicIPAddressNameDtr]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('manager').dnsNameforDtr]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('manager').publicIPAddressNameApp]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('manager').dnsNameforApp]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "name": "[variables('worker').publicIPAddressName]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "publicIPAllocationMethod": "[variables('publicIPAddressType')]",
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('worker').publicIPAddressDnsName]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('vnetName')]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('addressPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetPrefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "name": "[variables('nsgName')]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "ssh",
+                        "properties": {
+                            "access": "Allow",
+                            "description": "Allow SSH",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "22",
+                            "direction": "Inbound",
+                            "priority": 201,
+                            "protocol": "Tcp",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*"
+                        }
+                    },
+                    {
+                        "name": "ucp",
+                        "properties": {
+                            "access": "Allow",
+                            "description": "Allow UCP",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "12390",
+                            "direction": "Inbound",
+                            "priority": 206,
+                            "protocol": "Tcp",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*"
+                        }
+                    },
+                    {
+                        "name": "dtr",
+                        "properties": {
+                            "access": "Allow",
+                            "description": "Allow DTR",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "12391",
+                            "direction": "Inbound",
+                            "priority": 207,
+                            "protocol": "Tcp",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*"
+                        }
+                    },
+                    {
+                        "name": "dtrhttp",
+                        "properties": {
+                            "access": "Allow",
+                            "description": "Allow DTR",
+                            "destinationAddressPrefix": "*",
+                            "destinationPortRange": "12392",
+                            "direction": "Inbound",
+                            "priority": 208,
+                            "protocol": "Tcp",
+                            "sourceAddressPrefix": "*",
+                            "sourcePortRange": "*"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(variables('manager').nicNamePrefix, copyindex())]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "nicLoop",
+                "count": "[variables('manager').count]"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Static",
+                            "privateIPAddress": "[concat('10.0.144.', add(5, copyindex()))]",
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(variables('manager_sub0').lbID, '/backendAddressPools/BackendPool1')]"
+                                }
+                            ],
+                            "loadBalancerInboundNatRules": [
+                                {
+                                    "id": "[concat(variables('manager_sub0').lbID,'/inboundNatRules/default.',copyIndex())]"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]",
+                "[concat('Microsoft.Network/loadBalancers/', variables('manager').lbName)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(variables('worker').nicNamePrefix, copyindex())]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "nicLoop",
+                "count": "[variables('worker').count]"
+            },
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Static",
+                            "privateIPAddress": "[concat('10.0.144.', add(variables('manager').count, add(5, copyindex())))]",
+                            "subnet": {
+                                "id": "[variables('subnetRef')]"
+                            },
+                            "loadBalancerBackendAddressPools": [
+                                {
+                                    "id": "[concat(variables('worker_sub0').lbID, '/backendAddressPools/BackendPool1')]"
+                                }
+                            ],
+                            "loadBalancerInboundNatRules": [
+                                {
+                                    "id": "[concat(variables('worker_sub0').lbID,'/inboundNatRules/default.', copyindex())]"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/virtualNetworks/', variables('vnetName'))]",
+                "[concat('Microsoft.Network/loadBalancers/', variables('worker').lbName)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "name": "[variables('manager').lbName]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEndUcp",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[variables('manager_sub0').publicIPAddressIDUcp]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LoadBalancerFrontEndDtr",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[variables('manager_sub0').publicIPAddressIDDtr]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LoadBalancerFrontEndApp",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[variables('manager_sub0').publicIPAddressIDApp]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "BackendPool1"
+                    }
+                ],
+                "inboundNatRules": [
+                    {
+                        "name": "default.0",
+                        "properties": {
+                            "backendPort": 22,
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
+                            },
+                            "frontendPort": 50000,
+                            "protocol": "tcp"
+                        }
+                    },
+                    {
+                        "name": "default.1",
+                        "properties": {
+                            "backendPort": 22,
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
+                            },
+                            "frontendPort": 50001,
+                            "protocol": "tcp"
+                        }
+                    },
+                    {
+                        "name": "default.2",
+                        "properties": {
+                            "backendPort": 22,
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
+                            },
+                            "frontendPort": 50002,
+                            "protocol": "tcp"
+                        }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "LBRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDUcp]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('manager_sub1').lbPoolID]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 443,
+                            "backendPort": 12390,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('manager_sub1').lbProbeID]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LBRuleDtr",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDDtr]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('manager_sub1').lbPoolID]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 443,
+                            "backendPort": 12391,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('manager_sub1').lbProbeID]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LBRuleApp",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('manager_sub1').frontEndIPConfigIDApp]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('manager_sub1').lbPoolID]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('manager_sub1').lbProbeID]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "default",
+                        "properties": {
+                            "intervalInSeconds": 10,
+                            "numberOfProbes": 2,
+                            "port": 22,
+                            "protocol": "Tcp"
+                        }
+                    },
+                    {
+                        "name": "ucp",
+                        "properties": {
+                            "intervalInSeconds": 10,
+                            "numberOfProbes": 2,
+                            "port": 12390,
+                            "protocol": "Tcp"
+                        }
+                    },
+                    {
+                        "name": "dtr",
+                        "properties": {
+                            "intervalInSeconds": 10,
+                            "numberOfProbes": 2,
+                            "port": 12391,
+                            "protocol": "Tcp"
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('manager').publicIPAddressNameUcp)]",
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('manager').publicIPAddressNameDtr)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/loadBalancers",
+            "name": "[variables('worker').lbName]",
+            "apiVersion": "2015-05-01-preview",
+            "location": "[resourceGroup().location]",
+            "properties": {
+                "frontendIPConfigurations": [
+                    {
+                        "name": "LoadBalancerFrontEnd",
+                        "properties": {
+                            "publicIPAddress": {
+                                "id": "[variables('worker_sub0').publicIPAddressID]"
+                            }
+                        }
+                    }
+                ],
+                "backendAddressPools": [
+                    {
+                        "name": "BackendPool1"
+                    }
+                ],
+                "inboundNatRules": [
+                    {
+                        "name": "default.0",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('worker_sub1').frontEndIPConfigID]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPort": 50000,
+                            "backendPort": 3389,
+                            "enableFloatingIP": false
+                        }
+                    },
+                    {
+                        "name": "default.1",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('worker_sub1').frontEndIPConfigID]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPort": 50001,
+                            "backendPort": 3389,
+                            "enableFloatingIP": false
+                        }
+                    },
+                    {
+                        "name": "default.2",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('worker_sub1').frontEndIPConfigID]"
+                            },
+                            "protocol": "tcp",
+                            "frontendPort": 50002,
+                            "backendPort": 3389,
+                            "enableFloatingIP": false
+                        }
+                    }
+                ],
+                "loadBalancingRules": [
+                    {
+                        "name": "LBRule",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('worker_sub1').frontEndIPConfigID]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('worker_sub1').lbPoolID]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 80,
+                            "backendPort": 80,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('worker_sub1').lbProbeID]"
+                            }
+                        }
+                    },
+                    {
+                        "name": "LBRule443",
+                        "properties": {
+                            "frontendIPConfiguration": {
+                                "id": "[variables('worker_sub1').frontEndIPConfigID]"
+                            },
+                            "backendAddressPool": {
+                                "id": "[variables('worker_sub1').lbPoolID]"
+                            },
+                            "protocol": "Tcp",
+                            "frontendPort": 443,
+                            "backendPort": 443,
+                            "enableFloatingIP": false,
+                            "idleTimeoutInMinutes": 5,
+                            "probe": {
+                                "id": "[variables('worker_sub1').lbProbe443ID]"
+                            }
+                        }
+                    }
+                ],
+                "probes": [
+                    {
+                        "name": "tcpProbe",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 80,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    },
+                    {
+                        "name": "tcp443Probe",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "port": 443,
+                            "intervalInSeconds": 5,
+                            "numberOfProbes": 2
+                        }
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Network/publicIPAddresses/', variables('worker').publicIPAddressName)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[concat(variables('manager').vmNamePrefix, copyindex())]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "virtualMachineLoop",
+                "count": "[variables('manager').count]"
+            },
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('manager').availabilitySetName)]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[concat(variables('manager').vmNamePrefix, copyIndex())]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": true,
+                        "ssh": {
+                            "publicKeys": [
+                                {
+                                    "keyData": "[parameters('sshPublicKey')]",
+                                    "path": "[variables('sshKeyPath')]"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('manager').imagePublisher]",
+                        "offer": "[variables('manager').imageOffer]",
+                        "sku": "[variables('manager').imageSKU]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "osdiskmgr",
+                        "vhd": {
+                            "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('manager').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('manager').nicNamePrefix, copyindex()))]",
+                            "properties": {
+                                "primary": true
+                            }
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": "false"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('manager').nicNamePrefix, copyindex())]",
+                "[concat('Microsoft.Compute/availabilitySets/', variables('manager').availabilitySetName)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[concat(variables('worker').vmNamePrefix, copyindex())]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "virtualMachineLoop",
+                "count": "[variables('worker').count]"
+            },
+            "properties": {
+                "availabilitySet": {
+                    "id": "[resourceId('Microsoft.Compute/availabilitySets',variables('worker').availabilitySetName)]"
+                },
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[concat(variables('worker').vmNamePrefix, copyIndex())]",
+                    "adminUsername": "[parameters('adminUsername')]",
+                    "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('worker').imagePublisher]",
+                        "offer": "[variables('worker').imageOffer]",
+                        "sku": "[variables('worker').imageSKU]",
+                        "version": "latest"
+                    },
+                    "osDisk": {
+                        "name": "osdiskwrk",
+                        "vhd": {
+                            "uri": "[concat(reference(concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2015-06-15').primaryEndpoints.blob, variables('vhdContainerName'),'/',variables('worker').vmNamePrefix, copyIndex(),'-osdisk.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    },
+                    "dataDisks": []
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces',concat(variables('worker').nicNamePrefix, copyindex()))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": "false"
+                    }
+                }
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Storage/storageAccounts/', variables('storageAccountName'))]",
+                "[concat('Microsoft.Network/networkInterfaces/', variables('worker').nicNamePrefix, copyindex())]",
+                "[concat('Microsoft.Compute/availabilitySets/', variables('worker').availabilitySetName)]"
+            ]
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(variables('manager').vmNamePrefix, copyIndex(), '/mgr_scriptextension')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "VirtualMachineScriptExtensionLoop",
+                "count": "[variables('manager').count]"
+            },
+            "tags": {
+                "displayName": "[concat(variables('prefix'), '_mgr_', 'extension')]"
+            },
+            "properties": {
+                "publisher": "Microsoft.OSTCExtensions",
+                "type": "CustomScriptForLinux",
+                "typeHandlerVersion": "1.5",
+                "autoUpgradeMinorVersion": "true",
+                "settings": {
+                    "fileUris": [
+                        "[concat(parameters('artifactBaseUri'), 'interfaces')]",
+                        "[concat(parameters('artifactBaseUri'), 'set-static-ip.sh')]",
+                        "[concat(parameters('artifactBaseUri'), 'install-dockeronenode.sh')]"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat('bash install-dockeronenode.sh ', variables('manager_sub0').ucpHostname, ' ', variables('manager_sub0').dtrHostname, ' ', parameters('adminPassword'), ' ', parameters('ucpVersion'), ' ', parameters('dtrVersion'), ' ', parameters('dockerVersion'))]"
+                }
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', variables('manager').vmNamePrefix, copyindex())]"
+            ]
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "name": "[concat(variables('worker').vmNamePrefix, copyIndex(), '/wrk_scriptextension')]",
+            "apiVersion": "2015-06-15",
+            "location": "[resourceGroup().location]",
+            "copy": {
+                "name": "VirtualMachineScriptExtensionLoop",
+                "count": "[variables('worker').count]"
+            },
+            "tags": {
+                "displayName": "[concat(variables('prefix'), '_wrk_', 'extension')]"
+            },
+            "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.8",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": [
+                        "https://raw.githubusercontent.com/mattmcspirit/azurestack-test/master/configure-worker2.ps1"
+                    ]
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File configure-worker2.ps1 -DockerVersion ', parameters('dockerVersion'), ' -UcpVersion ', parameters('ucpVersion'), ' -DTRFQDN ', variables('manager_sub0').dtrHostname)]"
+                }
+            },
+            "dependsOn": [
+                "[concat('Microsoft.Compute/virtualMachines/', variables('worker').vmNamePrefix, copyindex())]"
+            ]
+        }
+    ],
+    "outputs": {
+        "mgr_ucp_pip": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameUcp)).ipAddress]"
+        },
+        "mgr_ucp_hostname": {
+            "type": "string",
+            "value": "[variables('manager_sub0').ucpHostname]"
+        },
+        "mgr_dtr_pip": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('manager').publicIPAddressNameDtr)).ipAddress]"
+        },
+        "mgr_dtr_hostname": {
+            "type": "string",
+            "value": "[variables('manager_sub0').dtrHostname]"
+        },
+        "wrk_pip": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('worker').publicIPAddressName)).ipAddress]"
+        }
+    }
 }
