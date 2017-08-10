@@ -867,7 +867,7 @@
                 "autoUpgradeMinorVersion": true,
                 "settings": {
                     "fileUris": [
-                        "https://raw.githubusercontent.com/mattmcspirit/azurestack-test/master/configure-worker2.ps1"
+                        "https://raw.githubusercontent.com/mattmcspirit/azurestack-test/master/configure-worker.ps1"
                     ]
                 },
                 "protectedSettings": {
